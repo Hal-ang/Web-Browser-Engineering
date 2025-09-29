@@ -4,6 +4,9 @@ import os
 import sys
 from typing import Optional, Dict, Tuple
 
+# 전역 연결 풀: 호스트:포트 -> 소켓 저장
+connection_pool = {}
+
 class URL:
     """URL 파싱 및 요청 처리를 위한 클래스"""
     
@@ -110,18 +113,25 @@ class URL:
     
     def _request_http(self) -> str:
         """HTTP/HTTPS 요청을 수행하고 응답을 반환합니다."""
-        if self.socket:
-            socket_addr = self.socket.getsockname()
-            if socket_addr[0] == self.host and socket_addr[1] == self.port:
-                sock = self.socket
-            else:
-                sock = self._create_socket()
+        # 연결 키 생성 (호스트:포트:스킴)
+        connection_key = f"{self.host}:{self.port}:{self.scheme}"
+        
+        # 기존 연결이 있는지 확인
+        if connection_key in connection_pool:
+            sock = connection_pool[connection_key]
+            print(f"기존 소켓 재사용: {connection_key}")  # 디버깅용
         else:
+            # 새 소켓 생성 및 연결
             sock = self._create_socket()
+            sock.connect((self.host, self.port))
+            connection_pool[connection_key] = sock
+            print(f"새 소켓 생성: {connection_key}")  # 디버깅용
 
-        sock.connect((self.host, self.port))
         self._send_request(sock)
-        return self._receive_response(sock)
+        response = self._receive_response(sock)
+        
+        # Content-Length가 있으면 소켓을 열어두고, 없으면 닫음
+        return response
     
     def _create_socket(self) -> socket.socket:
         """소켓을 생성하고 HTTPS인 경우 SSL로 래핑합니다."""
@@ -130,7 +140,7 @@ class URL:
             type=socket.SOCK_STREAM,
             proto=socket.IPPROTO_TCP,
         )
-        self.socket = sock
+        
         if self.scheme == 'https':
             ctx = ssl.create_default_context()
             sock = ctx.wrap_socket(sock, server_hostname=self.host)
@@ -171,11 +181,16 @@ class URL:
         if content_length:
             # 정확한 바이트 수만큼만 읽음 (소켓을 열어둠)
             body = response.read(int(content_length))
-            print(f"Content-Length: {content_length}바이트 읽음")  # 디버깅용
+            print(f"Content-Length: {content_length}바이트 읽음 - 소켓 유지")  # 디버깅용
+            # 소켓을 닫지 않음! keep-alive로 재사용 가능
         else:
-            # Content-Length가 없으면 모든 내용을 읽음 (연결 종료됨)
+            # Content-Length가 없으면 모든 내용을 읽음 (서버가 연결 종료)
             body = response.read()
-            print("Content-Length 없음: 모든 내용 읽음")  # 디버깅용
+            print("Content-Length 없음: 모든 내용 읽음 - 연결 종료")  # 디버깅용
+            # 이 경우 서버가 연결을 끊으므로 풀에서 제거
+            connection_key = f"{self.host}:{self.port}:{self.scheme}"
+            if connection_key in connection_pool:
+                del connection_pool[connection_key]
         
         return body
     
