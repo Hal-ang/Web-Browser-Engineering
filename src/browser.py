@@ -4,9 +4,18 @@ import ssl
 class URL:
   def __init__(self, url):
     # 입력: "http://example.com/path" 또는 "file:///path/to/file"
+
+    if url.startswith('data:'):
+      self.host = None
+      self.port = None
+      self.scheme, self.path = url.split(':', 1)
+
+      self.content_type , self.content = self.path.split(',', 1)
+      return
+
     self.scheme, url = url.split('://', 1)
     # 출력: self.scheme = "http", url = "example.com/path"
-    assert self.scheme in ['http', 'https', 'file']
+    assert self.scheme in ['http', 'https', 'file', 'data']
 
     if self.scheme == 'file':
       # file:///path/to/file -> /path/to/file
@@ -33,6 +42,9 @@ class URL:
 
 
   def request(self):
+    if self.scheme == 'data':
+      return self.content
+
     if self.scheme == 'file':
       # 로컬 파일 읽기
       try:
@@ -44,6 +56,8 @@ class URL:
         return f"Error: Permission denied - {self.path}"
       except Exception as e:
         return f"Error: {str(e)}"
+    
+
     
     # HTTP/HTTPS 처리
     # HTTP/1.1 지원
@@ -137,6 +151,7 @@ def load(url):
 if __name__ == '__main__':
   import sys
   import os
+
   
   if len(sys.argv) > 1:
     # 첫번째 인자를 읽어서 URL로 사용
