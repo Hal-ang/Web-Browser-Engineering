@@ -1,11 +1,12 @@
 import socket
+import ssl
 
 class URL:
   def __init__(self, url):
     # 입력: "http://example.com/path"
     self.scheme, url = url.split('://', 1)
     # 출력: self.scheme = "http", url = "example.com/path"
-    assert self.scheme == 'http'
+    assert self.scheme in ['http', 'https']
 
 
     if '/' not in url:
@@ -15,6 +16,17 @@ class URL:
     self.host, url = url.split('/', 1)
     # 출력: self.host = "example.com", url = "path"
     self.path = '/' + url
+
+    if (self.scheme == 'https'):
+      self.port = 443
+    else:
+      self.port = 80
+
+
+    # port 전달 시
+    if ':' in self.host:
+      self.host, self.port = self.host.split(':', 1)
+      self.port = int(self.port)
 
   def request(self):
     # 소켓 생성
@@ -28,8 +40,12 @@ class URL:
       proto=socket.IPPROTO_TCP,
     )
 
+    if (self.scheme == 'https'):
+      ctx = ssl.create_default_context()
+      s = ctx.wrap_socket(s, server_hostname=self.host)
+
     # 소켓 연결 (다른 컴퓨터에 연결)
-    s.connect((self.host, 80))
+    s.connect((self.host, self.port))
 
     request = "GET {} HTTP/1.0\r\n".format(self.path)
     request += "HOT: {}\r\n".format(self.host)
