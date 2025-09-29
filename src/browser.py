@@ -75,3 +75,31 @@ class URL:
       s.close()
 
       return body
+
+
+def show(body):
+  in_tag = False
+  for c in body:
+    if c == '<':
+      in_tag = True
+      continue
+    if c == '>':
+      in_tag = False
+      continue
+    if not in_tag:
+      print(c, end='')
+      
+
+def load(url):
+  body = url.request()
+  show(body)
+
+
+# CLI에서 스크립트를 실행했을 때만 실행되도록 하는 파이썬의 main 함수
+if __name__ == '__main__':
+  # 첫번째 인자를 읽어서 URL로 사용
+  import sys
+  load(URL(sys.argv[1]))
+  
+# 명령
+# python3 browser.py http://browser.engineering/http.html
