@@ -29,6 +29,12 @@ class URL:
       self.port = int(self.port)
 
   def request(self):
+    # HTTP/1.1 지원
+
+
+
+
+
     # 소켓 생성
     s = socket.socket(
       family=socket.AF_INET,
@@ -47,11 +53,14 @@ class URL:
     # 소켓 연결 (다른 컴퓨터에 연결)
     s.connect((self.host, self.port))
 
-    request = "GET {} HTTP/1.0\r\n".format(self.path)
-    request += "HOT: {}\r\n".format(self.host)
+    request = "GET {} HTTP/1.1\r\n".format(self.path)
+    request += "HOST: {}\r\n".format(self.host)
+    request += "CONNECTION: close\r\n"
+    request += "USER-AGENT: harang/1.0\r\n"
     # 줄바꿈은 \r\n 으로 표시, \n은 줄바꿈 불가
     # 마지막에는 꼭 두 번 보내야 함, 서버는 줄바꿈을 기다림
     request += "\r\n"
+    print(request)
     s.send(request.encode('utf-8'))
 
 
@@ -61,6 +70,7 @@ class URL:
     # 파이썬이 아닌 다른 언어는 read만 지원할 수 있음 / 이때는 소켓 상태를 확인하는 루프 작성 필요
     response = s.makefile('r', encoding='utf-8', newline='\r\n')
 
+    print(response)
     statusline = response.readline()
     version, status, explanation = statusline.split(' ', 2)
 
