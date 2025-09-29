@@ -17,7 +17,7 @@ class URL:
         self.host: Optional[str] = None
         self.port: Optional[int] = None
         self.path: str = ""
-        self.content_type: Optional[str] = None
+        self.content_type: Optional[str] = 'text/html'
         self.content: Optional[str] = None
         
         self._parse_url(url)
@@ -26,6 +26,10 @@ class URL:
         """URL을 파싱하여 구성 요소를 설정합니다."""
         if url.startswith('data:'):
             self._parse_data_url(url)
+            return
+            
+        if url.startswith('view-source:'):
+            self._parse_view_source_url(url)
             return
             
         remaining_url = self._parse_scheme_and_url(url)
@@ -40,11 +44,19 @@ class URL:
         """data: URL을 파싱합니다."""
         self.scheme, self.path = url.split(':', 1)
         self.content_type, self.content = self.path.split(',', 1)
+
+    def _parse_view_source_url(self, url: str) -> None:
+        """view-source: URL을 파싱합니다."""
+        self.scheme, self.url = url.split(':', 1)
+        self.content_type = 'text'
+        
+        remaining_url = self._parse_scheme_and_url(self.url)
+        self._parse_http_url(remaining_url)
     
     def _parse_scheme_and_url(self, url: str) -> str:
         """스킴을 분리하고 검증합니다."""
         self.scheme, remaining_url = url.split('://', 1)
-        assert self.scheme in ['http', 'https', 'file', 'data'], f"지원하지 않는 스킴: {self.scheme}"
+        assert self.scheme in ['http', 'https', 'file', 'data', 'view-source'], f"지원하지 않는 스킴: {self.scheme}"
         return remaining_url
     
     def _parse_file_url(self, remaining_url: str) -> None:
@@ -127,6 +139,7 @@ class URL:
         request += f"HOST: {self.host}\r\n"
         request += "CONNECTION: close\r\n"
         request += "USER-AGENT: harang/1.0\r\n"
+        request += f"CONTENT-TYPE: {self.content_type}\r\n"
         request += "\r\n"
         
         print(request)  # 디버깅용
