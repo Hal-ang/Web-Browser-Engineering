@@ -3,16 +3,21 @@ import ssl
 
 class URL:
   def __init__(self, url):
-    # 입력: "http://example.com/path"
+    # 입력: "http://example.com/path" 또는 "file:///path/to/file"
     self.scheme, url = url.split('://', 1)
     # 출력: self.scheme = "http", url = "example.com/path"
-    assert self.scheme in ['http', 'https']
+    assert self.scheme in ['http', 'https', 'file']
 
+    if self.scheme == 'file':
+      # file:///path/to/file -> /path/to/file
+      self.path = '/' + url
+      self.host = None
+      self.port = None
+      return
 
     if '/' not in url:
       url = url + '/'
-
-    # 입력: "example.com/path"
+  # 입력: "example.com/path"
     self.host, url = url.split('/', 1)
     # 출력: self.host = "example.com", url = "path"
     self.path = '/' + url
@@ -21,20 +26,27 @@ class URL:
       self.port = 443
     else:
       self.port = 80
-
-
     # port 전달 시
     if ':' in self.host:
       self.host, self.port = self.host.split(':', 1)
       self.port = int(self.port)
 
+
   def request(self):
+    if self.scheme == 'file':
+      # 로컬 파일 읽기
+      try:
+        with open(self.path, 'r', encoding='utf-8') as f:
+          return f.read()
+      except FileNotFoundError:
+        return f"Error: File not found - {self.path}"
+      except PermissionError:
+        return f"Error: Permission denied - {self.path}"
+      except Exception as e:
+        return f"Error: {str(e)}"
+    
+    # HTTP/HTTPS 처리
     # HTTP/1.1 지원
-
-
-
-
-
     # 소켓 생성
     s = socket.socket(
       family=socket.AF_INET,
@@ -123,9 +135,20 @@ def load(url):
 
 # CLI에서 스크립트를 실행했을 때만 실행되도록 하는 파이썬의 main 함수
 if __name__ == '__main__':
-  # 첫번째 인자를 읽어서 URL로 사용
   import sys
-  load(URL(sys.argv[1]))
+  import os
+  
+  if len(sys.argv) > 1:
+    # 첫번째 인자를 읽어서 URL로 사용
+    load(URL(sys.argv[1]))
+  else:
+    # URL 없이 시작하면 기본 로컬 파일 열기
+    default_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'default.html')
+    default_url = f"file://{default_file_path}"
+    print(f"기본 파일을 로드합니다: {default_url}")
+    load(URL(default_url))
   
 # 명령
 # python3 browser.py http://browser.engineering/http.html
+# python3 browser.py file:///path/to/file.html
+# python3 browser.py (기본 파일 로드)
