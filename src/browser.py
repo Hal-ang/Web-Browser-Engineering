@@ -19,7 +19,7 @@ class URL:
         self.path: str = ""
         self.content_type: Optional[str] = 'text/html'
         self.content: Optional[str] = None
-        
+        self.socket: Optional[socket.socket] = None
         self._parse_url(url)
     
     def _parse_url(self, url: str) -> None:
@@ -110,14 +110,18 @@ class URL:
     
     def _request_http(self) -> str:
         """HTTP/HTTPS 요청을 수행하고 응답을 반환합니다."""
-        sock = self._create_socket()
-        
-        try:
-            sock.connect((self.host, self.port))
-            self._send_request(sock)
-            return self._receive_response(sock)
-        finally:
-            sock.close()
+        if self.socket:
+            socket_addr = self.socket.getsockname()
+            if socket_addr[0] == self.host and socket_addr[1] == self.port:
+                sock = self.socket
+            else:
+                sock = self._create_socket()
+        else:
+            sock = self._create_socket()
+
+        sock.connect((self.host, self.port))
+        self._send_request(sock)
+        return self._receive_response(sock)
     
     def _create_socket(self) -> socket.socket:
         """소켓을 생성하고 HTTPS인 경우 SSL로 래핑합니다."""
@@ -126,7 +130,7 @@ class URL:
             type=socket.SOCK_STREAM,
             proto=socket.IPPROTO_TCP,
         )
-        
+        self.socket = sock
         if self.scheme == 'https':
             ctx = ssl.create_default_context()
             sock = ctx.wrap_socket(sock, server_hostname=self.host)
@@ -137,7 +141,8 @@ class URL:
         """HTTP 요청을 전송합니다."""
         request = f"GET {self.path} HTTP/1.1\r\n"
         request += f"HOST: {self.host}\r\n"
-        request += "CONNECTION: close\r\n"
+        request += "CONNECTION: Keep-Alive\r\n"
+
         request += "USER-AGENT: harang/1.0\r\n"
         request += f"CONTENT-TYPE: {self.content_type}\r\n"
         request += "\r\n"
@@ -160,12 +165,23 @@ class URL:
         assert 'transfer-encoding' not in response_headers, "Transfer-Encoding은 지원되지 않습니다"
         assert 'content-encoding' not in response_headers, "Content-Encoding은 지원되지 않습니다"
         
-        # 본문 읽기
-        body = response.read()
+        # Content-Length 헤더를 사용하여 정확한 바이트 수만큼 본문 읽기
+        # (keep-alive 연결을 위해 필요)
+        content_length = response_headers.get('content-length')
+        if content_length:
+            # 정확한 바이트 수만큼만 읽음 (소켓을 열어둠)
+            body = response.read(int(content_length))
+            print(f"Content-Length: {content_length}바이트 읽음")  # 디버깅용
+        else:
+            # Content-Length가 없으면 모든 내용을 읽음 (연결 종료됨)
+            body = response.read()
+            print("Content-Length 없음: 모든 내용 읽음")  # 디버깅용
+        
         return body
     
     def _parse_headers(self, response) -> Dict[str, str]:
         """HTTP 응답 헤더를 파싱합니다."""
+ 
         headers = {}
         
         while True:
