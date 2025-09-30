@@ -34,13 +34,19 @@ class URL:
         if url.startswith('view-source:'):
             self._parse_view_source_url(url)
             return
-            
-        remaining_url = self._parse_scheme_and_url(url)
+
+        try:
+            remaining_url = self._parse_scheme_and_url(url)
+        except ValueError as e:
+            print(e)
+            # 로컬 경로
+            self._parse_self_url(url)
+            return
         
         if self.scheme == 'file':
-            self._parse_file_url(remaining_url)
+            self._parse_self_url(remaining_url)
             return
-            
+
         self._parse_http_url(remaining_url)
     
     def _parse_data_url(self, url: str) -> None:
@@ -59,11 +65,12 @@ class URL:
     def _parse_scheme_and_url(self, url: str) -> str:
         """스킴을 분리하고 검증합니다."""
         self.scheme, remaining_url = url.split('://', 1)
-        assert self.scheme in ['http', 'https', 'file', 'data', 'view-source'], f"지원하지 않는 스킴: {self.scheme}"
+        if self.scheme not in ['http', 'https', 'file']:
+            raise ValueError(f"지원하지 않는 스킴: {self.scheme}")
         return remaining_url
     
-    def _parse_file_url(self, remaining_url: str) -> None:
-        """file: URL을 파싱합니다."""
+    def _parse_self_url(self, remaining_url: str) -> None:
+        """self: URL을 파싱합니다."""
         self.path = '/' + remaining_url
     
     def _parse_http_url(self, remaining_url: str) -> None:
@@ -84,6 +91,10 @@ class URL:
         if ':' in self.host:
             self.host, port_str = self.host.split(':', 1)
             self.port = int(port_str)
+
+    def _parse_self_url(self, remaining_url: str) -> None:
+        """self: URL을 파싱합니다."""
+        self.path = '/' + remaining_url
 
 
     def request(self) -> str:
@@ -163,13 +174,20 @@ class URL:
     def _receive_response(self, sock: socket.socket) -> str:
         """HTTP 응답을 수신하고 파싱합니다."""
         response = sock.makefile('r', encoding='utf-8', newline='\r\n')
-        
+
         # 상태 라인 파싱
         statusline = response.readline()
         print(f"Status: {statusline.strip()}")  # 디버깅용
         
         # 헤더 파싱
         response_headers = self._parse_headers(response)
+        
+
+        if response_headers.get('location'):
+            redirect_url = response_headers.get('location')
+     
+            new_url = URL(redirect_url)
+            return new_url.request()
         
         # 지원하지 않는 인코딩 확인
         assert 'transfer-encoding' not in response_headers, "Transfer-Encoding은 지원되지 않습니다"
@@ -196,7 +214,7 @@ class URL:
     
     def _parse_headers(self, response) -> Dict[str, str]:
         """HTTP 응답 헤더를 파싱합니다."""
- 
+
         headers = {}
         
         while True:
@@ -216,6 +234,11 @@ def show(body: str) -> None:
     Args:
         body: 처리할 HTML 문자열
     """
+    # body가 None이거나 비어있으면 처리하지 않음
+    if not body:
+        print("⚠️ 표시할 내용이 없습니다.")
+        return
+        
     in_tag = False
     
     for char in body:
