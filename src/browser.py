@@ -10,11 +10,12 @@ connection_pool = {}
 class URL:
     """URL 파싱 및 요청 처리를 위한 클래스"""
     
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, redirect_count: int = 0) -> None:
         """URL을 파싱하여 구성 요소로 분해합니다.
         
         Args:
             url: 파싱할 URL 문자열 (http, https, file, data 스킴 지원)
+            redirect_count: 현재 리다이렉트 횟수 (최대 2번 제한)
         """
         self.scheme: str = ""
         self.host: Optional[str] = None
@@ -23,6 +24,7 @@ class URL:
         self.content_type: Optional[str] = 'text/html'
         self.content: Optional[str] = None
         self.socket: Optional[socket.socket] = None
+        self.redirect_count: int = redirect_count  # 리다이렉트 횟수 추가
         self._parse_url(url)
     
     def _parse_url(self, url: str) -> None:
@@ -185,8 +187,18 @@ class URL:
 
         if response_headers.get('location'):
             redirect_url = response_headers.get('location')
-     
-            new_url = URL(redirect_url)
+            
+            # 리다이렉트 횟수 제한 확인 (최대 2번)
+            max_redirects = 2
+            if self.redirect_count >= max_redirects:
+                error_msg = f"⚠️ 리다이렉트가 너무 많습니다! (최대 {max_redirects}번)"
+                print(error_msg)
+                return f"<html><body><h1>리다이렉트 제한 초과</h1><p>{error_msg}</p><p>현재 {self.redirect_count}번 리다이렉트됨</p></body></html>"
+            
+            print(f"🔄 리다이렉트 #{self.redirect_count + 1}: {redirect_url}")
+            
+            # 새로운 URL 객체 생성 (리다이렉트 횟수 증가)
+            new_url = URL(redirect_url, self.redirect_count + 1)
             return new_url.request()
         
         # 지원하지 않는 인코딩 확인
