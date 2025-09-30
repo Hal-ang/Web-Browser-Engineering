@@ -94,11 +94,6 @@ class URL:
             self.host, port_str = self.host.split(':', 1)
             self.port = int(port_str)
 
-    def _parse_self_url(self, remaining_url: str) -> None:
-        """self: URL을 파싱합니다."""
-        self.path = '/' + remaining_url
-
-
     def request(self) -> str:
         """URL에 따라 적절한 요청을 수행하고 응답을 반환합니다."""
         if self.scheme == 'data':
@@ -142,6 +137,7 @@ class URL:
 
         self._send_request(sock)
         response = self._receive_response(sock)
+        print(response)
         
         # Content-Length가 있으면 소켓을 열어두고, 없으면 닫음
         return response
@@ -182,9 +178,10 @@ class URL:
         print(f"Status: {statusline.strip()}")  # 디버깅용
         
         # 헤더 파싱
+        print(response)
         response_headers = self._parse_headers(response)
         
-
+        print(response_headers)
         if response_headers.get('location'):
             redirect_url = response_headers.get('location')
             
@@ -208,9 +205,11 @@ class URL:
         # Content-Length 헤더를 사용하여 정확한 바이트 수만큼 본문 읽기
         # (keep-alive 연결을 위해 필요)
         content_length = response_headers.get('content-length')
+        print(content_length)
         if content_length:
             # 정확한 바이트 수만큼만 읽음 (소켓을 열어둠)
             body = response.read(int(content_length))
+            print(body)
             print(f"Content-Length: {content_length}바이트 읽음 - 소켓 유지")  # 디버깅용
             # 소켓을 닫지 않음! keep-alive로 재사용 가능
         else:
@@ -225,7 +224,7 @@ class URL:
         return body
     
     def _parse_headers(self, response) -> Dict[str, str]:
-        """HTTP 응답 헤더를 파싱합니다."""
+        print("""HTTP 응답 헤더를 파싱합니다.""")
 
         headers = {}
         
@@ -285,6 +284,7 @@ def load(url: URL) -> None:
         url: 로드할 URL 객체
     """
     body = url.request()
+    print(body)
     show(body)
 
 
